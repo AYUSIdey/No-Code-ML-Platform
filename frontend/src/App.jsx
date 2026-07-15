@@ -2,15 +2,63 @@ import React, { useState, useEffect } from 'react';
 import { 
   UploadCloud, FileText, Database, AlertCircle, BarChart2, 
   Table as TableIcon, Sparkles, Settings, PlayCircle, Activity,
-  LayoutDashboard, BrainCircuit, Grid, LineChart as LineChartIcon, 
-  Download, ChevronRight, Eye, Binary, Image as ImageIcon 
+  LayoutDashboard, BrainCircuit, Grid, LineChart as LineChartIcon, Download, ChevronRight, Eye, Gamepad2, ImageIcon, Binary,
+  Rocket, Zap, ShieldCheck
 } from 'lucide-react';
-import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, BarChart, Bar 
-} from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+
+// --- Mini-Game Component for the Loading Screen ---
+const TicTacToe = () => {
+  const [board, setBoard] = useState(Array(9).fill(null));
+  const [xIsNext, setXIsNext] = useState(true);
+
+  const calculateWinner = (squares) => {
+    const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+    for (let i = 0; i < lines.length; i++) {
+      const [a, b, c] = lines[i];
+      if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) return squares[a];
+    }
+    return null;
+  };
+
+  const winner = calculateWinner(board);
+  const isDraw = !winner && board.every(square => square !== null);
+
+  const handleClick = (i) => {
+    if (board[i] || winner) return;
+    const newBoard = [...board];
+    newBoard[i] = xIsNext ? 'X' : 'O';
+    setBoard(newBoard);
+    setXIsNext(!xIsNext);
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center w-full">
+      <div className="mb-3 text-sm font-bold text-slate-600">
+        {winner ? `Winner: ${winner} 🎉` : isDraw ? "It's a Draw! 🤝" : `Next player: ${xIsNext ? 'X' : 'O'}`}
+      </div>
+      <div className="grid grid-cols-3 gap-2 mb-4 bg-slate-200 p-2 rounded-xl">
+        {board.map((square, i) => (
+          <button
+            key={i}
+            onClick={() => handleClick(i)}
+            className={`w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center text-2xl font-bold rounded-lg shadow-sm transition-all bg-white hover:bg-slate-50 ${square === 'X' ? 'text-teal-500' : 'text-rose-500'}`}
+          >
+            {square}
+          </button>
+        ))}
+      </div>
+      <button onClick={() => { setBoard(Array(9).fill(null)); setXIsNext(true); }} className="px-4 py-2 bg-slate-800 text-white text-xs font-bold rounded-lg hover:bg-slate-700 transition-colors">
+        Restart Game
+      </button>
+    </div>
+  );
+};
 
 export default function App() {
+  // --- NEW: Landing Page State ---
+  const [isStarted, setIsStarted] = useState(false);
+
   // Application State
   const [modality, setModality] = useState(null); // 'tabular' or 'vision'
   const [file, setFile] = useState(null);
@@ -60,7 +108,6 @@ export default function App() {
     formData.append('file', file);
 
     try {
-      // Dynamic endpoint based on modality
       const endpoint = modality === 'tabular' 
         ? 'http://127.0.0.1:8000/api/upload-dataset/' 
         : 'http://127.0.0.1:8000/api/upload-vision-dataset/';
@@ -80,7 +127,7 @@ export default function App() {
       setTargetColumn("");
       setTaskType("");
       setTrainResults(null);
-      setActiveTab('eda'); // Default to EDA on new upload
+      setActiveTab('eda'); 
     } catch (err) {
       setError(err.message);
     } finally {
@@ -89,7 +136,6 @@ export default function App() {
   };
 
   const handleTrain = async () => {
-    // If tabular, we need all 3 parameters. If vision, we just need the file.
     if (modality === 'tabular' && (!file || !targetColumn || !taskType)) return;
     if (modality === 'vision' && !file) return;
     
@@ -100,14 +146,12 @@ export default function App() {
     const formData = new FormData();
     formData.append('file', file);
     
-    // Only append these if we are doing tabular data
     if (modality === 'tabular') {
       formData.append('target_column', targetColumn);
       formData.append('task_type', taskType);
     }
 
     try {
-      // Choose the right endpoint based on modality!
       const endpoint = modality === 'tabular' 
         ? 'http://127.0.0.1:8000/api/train-model/' 
         : 'http://127.0.0.1:8000/api/train-vision-model/';
@@ -124,7 +168,7 @@ export default function App() {
 
       const data = await response.json();
       setTrainResults(data);
-      setActiveTab('training'); // Keep them on the training tab to see the leaderboard
+      setActiveTab('training'); 
     } catch (err) {
       setError(err.message);
     } finally {
@@ -135,19 +179,99 @@ export default function App() {
   const navTabs = [
     { id: 'eda', label: 'Data Exploration', icon: LayoutDashboard, disabled: false },
     { id: 'training', label: 'Model Training', icon: BrainCircuit, disabled: false },
-    { id: 'explainability', label: 'Feature Importance', icon: Eye, disabled: !trainResults },
+    { id: 'explainability', label: 'Feature Importance', icon: Eye, disabled: !trainResults || modality === 'vision' }, // Hidden for vision currently
     { id: 'matrices', label: 'Confusion Matrices', icon: Grid, disabled: !trainResults || trainResults.task_type !== 'classification' },
     { id: 'graphs', label: 'Performance Graphs', icon: LineChartIcon, disabled: !trainResults },
     { id: 'download', label: 'Download Models', icon: Download, disabled: !trainResults },
   ];
 
+  // ==========================================
+  // VIEW 0: SAAS LANDING PAGE
+  // ==========================================
+  if (!isStarted) {
+    return (
+      <div className="min-h-screen bg-slate-50 font-sans selection:bg-teal-200">
+        {/* Navigation Bar */}
+        <nav className="flex items-center justify-between px-8 py-6 max-w-7xl mx-auto">
+          <div className="flex items-center gap-2 text-teal-600 font-extrabold text-2xl tracking-tight">
+            <BrainCircuit size={32} />
+            <span>Easy<span className="text-slate-800">ML</span></span>
+          </div>
+          <button 
+            onClick={() => setIsStarted(true)}
+            className="hidden md:block px-6 py-2.5 bg-slate-900 text-white rounded-full font-semibold hover:bg-slate-800 transition-colors shadow-sm"
+          >
+            Go to App
+          </button>
+        </nav>
+
+        {/* Hero Section */}
+        <main className="max-w-7xl mx-auto px-8 pt-16 pb-24 flex flex-col items-center text-center animate-in fade-in slide-in-from-bottom-8 duration-700">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-teal-50 border border-teal-100 text-teal-700 text-sm font-bold mb-8 shadow-sm">
+            <Sparkles size={16} className="text-teal-500" />
+            <span>Now supporting Computer Vision & Deep Learning</span>
+          </div>
+          
+          <h1 className="text-5xl md:text-7xl font-extrabold text-slate-900 tracking-tight leading-tight max-w-4xl mb-6">
+            Train Enterprise AI Models <br className="hidden md:block"/>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-500 to-indigo-600">Without Writing Code.</span>
+          </h1>
+          
+          <p className="text-lg md:text-xl text-slate-500 max-w-2xl mb-10 leading-relaxed">
+            Upload your Tabular Data or Images. Our autonomous pipeline handles the EDA, preprocessing, algorithm selection, and hyperparameter tuning in seconds.
+          </p>
+          
+          <button 
+            onClick={() => setIsStarted(true)}
+            className="group relative inline-flex items-center justify-center px-8 py-4 font-bold text-white bg-slate-900 rounded-full overflow-hidden transition-all hover:scale-105 shadow-xl hover:shadow-2xl"
+          >
+            <span className="absolute inset-0 w-full h-full -mt-1 rounded-lg opacity-30 bg-gradient-to-b from-transparent via-transparent to-black"></span>
+            <span className="relative flex items-center gap-2 text-lg">
+              Launch Workspace <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
+            </span>
+          </button>
+        </main>
+
+        {/* Feature Grid */}
+        <section className="bg-white border-t border-slate-200 py-24">
+          <div className="max-w-7xl mx-auto px-8 grid grid-cols-1 md:grid-cols-3 gap-12">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-2 shadow-sm">
+                <LayoutDashboard size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-slate-800">Automated EDA</h3>
+              <p className="text-slate-500 leading-relaxed">Instantly visualize missing values, data distributions, and correlations the moment you upload your dataset.</p>
+            </div>
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="w-16 h-16 bg-teal-50 text-teal-600 rounded-2xl flex items-center justify-center mb-2 shadow-sm">
+                <Zap size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-slate-800">Multi-Algorithm Racing</h3>
+              <p className="text-slate-500 leading-relaxed">Simultaneously train Random Forests, Logistic Regression, and MobileNetV2 CNNs to find the perfect fit.</p>
+            </div>
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="w-16 h-16 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mb-2 shadow-sm">
+                <ShieldCheck size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-slate-800">Explainable AI (XAI)</h3>
+              <p className="text-slate-500 leading-relaxed">Break open the black box. Generate feature importance graphs and confusion matrices to audit your models.</p>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // VIEW 1: UPLOAD SCREEN (After clicking Get Started)
+  // ==========================================
   if (!edaData) {
     return (
       <div className="min-h-screen bg-gray-50 text-gray-800 font-sans p-8 flex flex-col items-center justify-center">
         <header className="mb-10 text-center">
-          <h1 className="text-4xl font-extrabold text-teal-600 mb-2 flex justify-center items-center gap-3">
-            <BarChart2 size={36} />
-            No-Code ML Platform
+          <h1 className="text-4xl font-extrabold text-slate-900 mb-2 flex justify-center items-center gap-3">
+            <BrainCircuit size={36} className="text-teal-600" />
+            EasyML
           </h1>
           <p className="text-gray-500 text-lg">Select your project type and upload your dataset to begin.</p>
         </header>
@@ -250,14 +374,17 @@ export default function App() {
     );
   }
 
+  // ==========================================
+  // VIEW 2: WORKSPACE (After data is loaded)
+  // ==========================================
   return (
     <div className="h-screen flex bg-gray-50 text-gray-800 font-sans overflow-hidden">
       
       {/* SIDEBAR NAVIGATION */}
       <div className="w-72 bg-slate-900 text-slate-300 flex flex-col shrink-0">
         <div className="p-6 flex items-center gap-3 text-white border-b border-slate-800">
-          <BarChart2 className="text-teal-400" size={28} />
-          <h2 className="text-xl font-bold tracking-wide">AutoML</h2>
+          <BrainCircuit className="text-teal-400" size={28} />
+          <h2 className="text-xl font-bold tracking-wide">EasyML</h2>
         </div>
         
         <div className="p-4 flex flex-col gap-2 flex-1 overflow-y-auto">
@@ -271,7 +398,7 @@ export default function App() {
                 disabled={tab.disabled}
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all ${
-                  tab.disabled ? 'opacity-50 cursor-not-allowed' : 
+                  tab.disabled ? 'opacity-50 cursor-not-allowed hidden' : 
                   isActive ? 'bg-teal-500/10 text-teal-400' : 'hover:bg-slate-800 hover:text-white'
                 }`}
               >
@@ -286,7 +413,7 @@ export default function App() {
         </div>
 
         <div className="p-4 border-t border-slate-800">
-          <button onClick={() => { setEdaData(null); setFile(null); setTrainResults(null); setModality(null); }} className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm font-medium transition-colors">
+          <button onClick={() => { setEdaData(null); setFile(null); setTrainResults(null); setModality(null); setIsStarted(false); }} className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm font-medium transition-colors">
             Exit Workspace
           </button>
         </div>
@@ -375,69 +502,84 @@ export default function App() {
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
               <h2 className="text-3xl font-extrabold text-slate-800">Model Training Setup</h2>
               
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-                  
-                  {modality === 'tabular' ? (
-                    <>
-                      {/* TABULAR TRAINING SETUP */}
-                      <div className="space-y-6">
-                        <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-2">1. Target Column (To Predict)</label>
-                          <select value={targetColumn} onChange={(e) => setTargetColumn(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 bg-gray-50">
-                            <option value="">-- Choose a column --</option>
-                            {Object.keys(edaData.column_types).map(col => (<option key={col} value={col}>{col}</option>))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-2">2. Machine Learning Task</label>
-                          <select value={taskType} onChange={(e) => setTaskType(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50" disabled={!targetColumn}>
-                            <option value="">-- Auto-selected by AI --</option>
-                            <option value="classification">Classification (Categories)</option>
-                            <option value="regression">Regression (Numbers)</option>
-                          </select>
-                        </div>
-                      </div>
+              {isTraining ? (
+                // --- NEW LOADING SCREEN W/ MINI-GAME ---
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden p-8 md:p-12 flex flex-col items-center justify-center min-h-[500px] animate-in zoom-in-95 duration-500">
+                  <div className="relative mb-6">
+                    <div className="absolute inset-0 bg-teal-400 rounded-full blur-xl opacity-20 animate-pulse"></div>
+                    <BrainCircuit size={64} className="text-teal-500 animate-pulse relative z-10" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-slate-800 mb-2 text-center">Training your AI Models...</h3>
+                  <p className="text-gray-500 text-center max-w-md mb-8 text-sm">
+                    Depending on the size of your dataset and the algorithms being used, this process can take anywhere from a few seconds to a few minutes. <strong>Please don't close this tab!</strong>
+                  </p>
 
-                      <div className="flex flex-col justify-between">
-                        {aiReasoning ? (
-                          <div className="bg-violet-50 border border-violet-200 p-5 rounded-xl flex items-start gap-3">
-                            <Sparkles className="text-violet-600 shrink-0 mt-0.5" />
-                            <div>
-                              <h4 className="font-bold text-violet-900 mb-1">AI Assistant</h4>
-                              <p className="text-violet-700 text-sm leading-relaxed">{aiReasoning}</p>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="bg-gray-50 border border-gray-200 p-5 rounded-xl flex items-start gap-3 text-gray-400 h-full">
-                            <Sparkles className="shrink-0 mt-0.5" />
-                            <p className="text-sm">Select a target column to get AI recommendations.</p>
-                          </div>
-                        )}
-                        <button onClick={handleTrain} disabled={!targetColumn || !taskType || isTraining} className={`mt-6 w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all ${!targetColumn || !taskType || isTraining ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-slate-900 text-white hover:bg-black'}`}>
-                          <PlayCircle size={24} className={isTraining ? 'animate-spin' : ''} />
-                          {isTraining ? 'Training Models...' : 'Start Pipeline'}
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      {/* VISION TRAINING SETUP */}
-                      <div className="bg-rose-50 border border-rose-200 p-6 rounded-xl flex flex-col justify-center">
-                         <h3 className="text-xl font-bold text-rose-800 mb-2">Computer Vision Pipeline</h3>
-                         <p className="text-rose-700">We will automatically convert your images into tensor arrays and train image classification algorithms based on your folder names.</p>
-                      </div>
-                      <div className="flex flex-col justify-end">
-                        <button onClick={handleTrain} disabled={isTraining} className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all ${isTraining ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-rose-600 text-white hover:bg-rose-700 shadow-md'}`}>
-                          <PlayCircle size={24} className={isTraining ? 'animate-spin' : ''} />
-                          {isTraining ? 'Processing Images...' : 'Start Vision Training'}
-                        </button>
-                      </div>
-                    </>
-                  )}
-                  
+                  <div className="w-full max-w-md bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-inner">
+                    <h4 className="font-bold text-slate-700 flex items-center justify-center gap-2 mb-4">
+                      <Gamepad2 size={18} className="text-indigo-500"/> While you wait, play a game!
+                    </h4>
+                    <TicTacToe />
+                  </div>
                 </div>
-              </div>
+              ) : modality === 'tabular' ? (
+                // --- TABULAR SETUP SCREEN ---
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-6">
+                      <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-2">1. Target Column (To Predict)</label>
+                        <select value={targetColumn} onChange={(e) => setTargetColumn(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 bg-gray-50">
+                          <option value="">-- Choose a column --</option>
+                          {edaData.column_types && Object.keys(edaData.column_types).map(col => (<option key={col} value={col}>{col}</option>))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-2">2. Machine Learning Task</label>
+                        <select value={taskType} onChange={(e) => setTaskType(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50" disabled={!targetColumn}>
+                          <option value="">-- Auto-selected by AI --</option>
+                          <option value="classification">Classification (Categories)</option>
+                          <option value="regression">Regression (Numbers)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col justify-between">
+                      {aiReasoning ? (
+                        <div className="bg-violet-50 border border-violet-200 p-5 rounded-xl flex items-start gap-3">
+                          <Sparkles className="text-violet-600 shrink-0 mt-0.5" />
+                          <div>
+                            <h4 className="font-bold text-violet-900 mb-1">AI Assistant</h4>
+                            <p className="text-violet-700 text-sm leading-relaxed">{aiReasoning}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-gray-50 border border-gray-200 p-5 rounded-xl flex items-start gap-3 text-gray-400 h-full">
+                          <Sparkles className="shrink-0 mt-0.5" />
+                          <p className="text-sm">Select a target column to get AI recommendations.</p>
+                        </div>
+                      )}
+                      <button onClick={handleTrain} disabled={!targetColumn || !taskType || isTraining} className={`mt-6 w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all ${!targetColumn || !taskType || isTraining ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-slate-900 text-white hover:bg-black'}`}>
+                        <PlayCircle size={24} className={isTraining ? 'animate-spin' : ''} />
+                        {isTraining ? 'Training Models...' : 'Start Pipeline'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                // --- VISION SETUP SCREEN ---
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden p-8 grid gap-8">
+                  <div className="bg-rose-50 border border-rose-200 p-6 rounded-xl flex flex-col justify-center">
+                      <h3 className="text-xl font-bold text-rose-800 mb-2">Computer Vision Pipeline</h3>
+                      <p className="text-rose-700">We will automatically convert your images into tensor arrays and train image classification algorithms based on your folder names.</p>
+                  </div>
+                  <div className="flex flex-col justify-end">
+                    <button onClick={handleTrain} disabled={isTraining} className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all ${isTraining ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-rose-600 text-white hover:bg-rose-700 shadow-md'}`}>
+                      <PlayCircle size={24} className={isTraining ? 'animate-spin' : ''} />
+                      {isTraining ? 'Processing Images...' : 'Start Vision Training'}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {trainResults && (
                 <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden animate-in fade-in">
@@ -485,9 +627,11 @@ export default function App() {
                     </table>
                   </div>
                   <div className="p-4 bg-slate-50 border-t border-gray-200 flex gap-4 justify-end">
-                    <button onClick={() => setActiveTab('explainability')} className="text-indigo-600 font-bold text-sm hover:text-indigo-800 flex items-center gap-1">
-                      View Feature Importance <ChevronRight size={16} />
-                    </button>
+                    {modality === 'tabular' && (
+                      <button onClick={() => setActiveTab('explainability')} className="text-indigo-600 font-bold text-sm hover:text-indigo-800 flex items-center gap-1">
+                        View Feature Importance <ChevronRight size={16} />
+                      </button>
+                    )}
                     <button onClick={() => setActiveTab('matrices')} className="text-teal-600 font-bold text-sm hover:text-teal-800 flex items-center gap-1">
                       View Detailed Metrics <ChevronRight size={16} />
                     </button>
@@ -707,7 +851,6 @@ export default function App() {
                       This serialized pipeline includes your configured imputer, scaler/encoder, and the {modelName} algorithm.
                     </div>
 
-                    {/* Download Button using standard <a> tag to hit our FastAPI endpoint */}
                     <a 
                       href={`http://127.0.0.1:8000/api/download-model/${metrics.download_file}`}
                       download={metrics.download_file}
