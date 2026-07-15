@@ -179,7 +179,8 @@ export default function App() {
   const navTabs = [
     { id: 'eda', label: 'Data Exploration', icon: LayoutDashboard, disabled: false },
     { id: 'training', label: 'Model Training', icon: BrainCircuit, disabled: false },
-    { id: 'explainability', label: 'Feature Importance', icon: Eye, disabled: !trainResults || modality === 'vision' }, // Hidden for vision currently
+    // REMOVED the Vision restriction on the Explainability tab so it always shows up when a model is trained!
+    { id: 'explainability', label: 'Explainable AI', icon: Eye, disabled: !trainResults }, 
     { id: 'matrices', label: 'Confusion Matrices', icon: Grid, disabled: !trainResults || trainResults.task_type !== 'classification' },
     { id: 'graphs', label: 'Performance Graphs', icon: LineChartIcon, disabled: !trainResults },
     { id: 'download', label: 'Download Models', icon: Download, disabled: !trainResults },
@@ -627,11 +628,10 @@ export default function App() {
                     </table>
                   </div>
                   <div className="p-4 bg-slate-50 border-t border-gray-200 flex gap-4 justify-end">
-                    {modality === 'tabular' && (
-                      <button onClick={() => setActiveTab('explainability')} className="text-indigo-600 font-bold text-sm hover:text-indigo-800 flex items-center gap-1">
-                        View Feature Importance <ChevronRight size={16} />
-                      </button>
-                    )}
+                    {/* Make sure the View Explainability button is available for BOTH modalities now! */}
+                    <button onClick={() => setActiveTab('explainability')} className="text-indigo-600 font-bold text-sm hover:text-indigo-800 flex items-center gap-1">
+                      {modality === 'tabular' ? 'View Feature Importance' : 'View Grad-CAM'} <ChevronRight size={16} />
+                    </button>
                     <button onClick={() => setActiveTab('matrices')} className="text-teal-600 font-bold text-sm hover:text-teal-800 flex items-center gap-1">
                       View Detailed Metrics <ChevronRight size={16} />
                     </button>
@@ -641,7 +641,7 @@ export default function App() {
             </div>
           )}
 
-          {/* TAB 2.5: FEATURE IMPORTANCE (Explainable AI) */}
+          {/* TAB 2.5: EXPLAINABLE AI (Tabular SHAP/Trees vs Vision Grad-CAM) */}
           {activeTab === 'explainability' && trainResults && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
               <div className="flex items-center gap-4 mb-2">
@@ -649,59 +649,98 @@ export default function App() {
                   <Eye size={32} />
                 </div>
                 <div>
-                  <h2 className="text-3xl font-extrabold text-slate-800">Feature Importance (XAI)</h2>
-                  <p className="text-gray-500 mt-1">Discover which columns in your dataset had the biggest impact on the model's predictions.</p>
+                  <h2 className="text-3xl font-extrabold text-slate-800">
+                    {modality === 'tabular' ? 'Feature Importance (XAI)' : 'Visual Explanations (Grad-CAM)'}
+                  </h2>
+                  <p className="text-gray-500 mt-1">
+                    {modality === 'tabular' 
+                      ? "Discover which columns in your dataset had the biggest impact on the model's predictions." 
+                      : "See exactly which pixels the Deep Learning model looked at to make its decision using Gradient-weighted Class Activation Mapping."}
+                  </p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {Object.entries(trainResults.models).map(([modelName, metrics]) => {
-                  if (!metrics.feature_importance) return null;
                   
-                  return (
-                    <div key={modelName} className="bg-white border border-gray-200 p-6 rounded-xl shadow-sm relative h-[450px] flex flex-col">
-                      {trainResults.best_model === modelName && (
-                        <div className="absolute top-4 right-4 bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
-                          <Sparkles size={12} /> Winner
+                  // Render the CNN Grad-CAM UI if it exists for this model
+                  if (metrics.gradcam_images) {
+                    return (
+                      <div key={modelName} className="bg-white border border-gray-200 p-6 rounded-xl shadow-sm relative col-span-1 lg:col-span-2">
+                        {trainResults.best_model === modelName && (
+                          <div className="absolute top-4 right-4 bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
+                            <Sparkles size={12} /> Winner
+                          </div>
+                        )}
+                        <h4 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
+                          <Activity size={18} className="text-indigo-500"/> {modelName}
+                        </h4>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          {metrics.gradcam_images.map((imgObj, idx) => (
+                            <div key={idx} className="bg-slate-50 p-6 rounded-xl border border-slate-100 flex flex-col items-center">
+                              <span className="text-sm font-bold text-slate-700 mb-4 bg-white px-3 py-1 rounded shadow-sm">{imgObj.label}</span>
+                              <div className="flex gap-6 items-center">
+                                <div className="text-center">
+                                  <img src={`data:image/jpeg;base64,${imgObj.original}`} className="w-32 h-32 md:w-48 md:h-48 rounded-lg shadow-md object-cover border border-slate-200" alt="Original" />
+                                  <span className="text-xs text-slate-400 mt-2 block font-medium uppercase">Original Image</span>
+                                </div>
+                                <div className="text-slate-300">
+                                  <ChevronRight size={32} />
+                                </div>
+                                <div className="text-center">
+                                  <img src={`data:image/jpeg;base64,${imgObj.gradcam}`} className="w-32 h-32 md:w-48 md:h-48 rounded-lg shadow-md object-cover border border-slate-200" alt="GradCAM" />
+                                  <span className="text-xs text-indigo-400 mt-2 block font-bold uppercase">AI Focus (Grad-CAM)</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      )}
-                      <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
-                        <Activity size={18} className="text-indigo-500"/> {modelName}
-                      </h4>
-                      <p className="text-xs text-gray-500 mb-6">Top driving factors for predictions</p>
-                      
-                      <div className="flex-1 w-full h-full min-h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart 
-                            data={metrics.feature_importance} 
-                            layout="vertical" 
-                            margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
-                          >
-                            <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f0f0f0" />
-                            <XAxis type="number" hide />
-                            <YAxis 
-                              dataKey="feature" 
-                              type="category" 
-                              axisLine={false} 
-                              tickLine={false} 
-                              tick={{fontSize: 12, fill: '#4b5563'}}
-                              width={100}
-                            />
-                            <Tooltip 
-                              formatter={(value) => [(value * 100).toFixed(2) + '%', 'Importance']}
-                              contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                            />
-                            <Bar 
-                              dataKey="importance" 
-                              fill={trainResults.best_model === modelName ? "#10b981" : "#6366f1"} 
-                              radius={[0, 4, 4, 0]}
-                              barSize={20}
-                            />
-                          </BarChart>
-                        </ResponsiveContainer>
                       </div>
-                    </div>
-                  );
+                    );
+                  }
+
+                  // Render standard Tabular Bar Charts for other models
+                  if (metrics.feature_importance) {
+                    return (
+                      <div key={modelName} className="bg-white border border-gray-200 p-6 rounded-xl shadow-sm relative h-[450px] flex flex-col">
+                        {trainResults.best_model === modelName && (
+                          <div className="absolute top-4 right-4 bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
+                            <Sparkles size={12} /> Winner
+                          </div>
+                        )}
+                        <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
+                          <Activity size={18} className="text-indigo-500"/> {modelName}
+                        </h4>
+                        <p className="text-xs text-gray-500 mb-6">Top driving factors for predictions</p>
+                        
+                        <div className="flex-1 w-full h-full min-h-[300px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={metrics.feature_importance} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f0f0f0" />
+                              <XAxis type="number" hide />
+                              <YAxis dataKey="feature" type="category" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#4b5563'}} width={100} />
+                              <Tooltip formatter={(value) => [(value * 100).toFixed(2) + '%', 'Importance']} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
+                              <Bar dataKey="importance" fill={trainResults.best_model === modelName ? "#10b981" : "#6366f1"} radius={[0, 4, 4, 0]} barSize={20} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // If it's a vision model without Grad-CAM (like Random Forest on images), show this placeholder
+                  if (modality === 'vision' && !metrics.gradcam_images) {
+                    return (
+                      <div key={modelName} className="bg-white border border-gray-200 p-6 rounded-xl shadow-sm relative flex flex-col items-center justify-center min-h-[300px] text-center">
+                        <Activity size={48} className="text-slate-200 mb-4" />
+                        <h4 className="font-bold text-gray-800 mb-2">{modelName}</h4>
+                        <p className="text-sm text-gray-400 max-w-xs">Explainability mapping is only available for Deep Learning (CNN) architectures.</p>
+                      </div>
+                    )
+                  }
+
+                  return null;
                 })}
               </div>
             </div>
